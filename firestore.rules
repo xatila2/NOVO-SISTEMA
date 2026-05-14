@@ -1,0 +1,32 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() { return request.auth != null; }
+    function existing() { return resource.data; }
+    function incoming() { return request.resource.data; }
+
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /stores/{storeId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn(); // Simplified for MVP
+    }
+
+    match /goals/{goalId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /sales/{saleId} {
+      allow read: if isSignedIn() && (existing().userId == request.auth.uid || existing().storeId != null);
+      allow write: if isSignedIn() && incoming().userId == request.auth.uid;
+    }
+  }
+}
