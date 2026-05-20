@@ -4,6 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My Google AI Studio App</title>
+    <script>
+      // Prevent fetch polyfills from crashing the app due to AI Studio iframe restrictions
+      const originalFetch = window.fetch;
+      Object.defineProperty(window, 'fetch', {
+        get() { return originalFetch; },
+        set(newFetch) { console.warn('Ignored fetch polyfill attempt'); },
+        configurable: true
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>

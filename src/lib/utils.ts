@@ -23,8 +23,8 @@ export function calculateWorkingDays(month: number, year: number, holidays: stri
     const dayOfWeek = d.getDay();
     const dateString = d.toISOString().split('T')[0];
     
-    // 0 is Sunday, 6 is Saturday
-    if (dayOfWeek !== 0 && dayOfWeek !== 6 && !holidays.includes(dateString)) {
+    // For a clothing store, only Sunday (0) is NOT a working day. Saturday (6) is an active working day.
+    if (dayOfWeek !== 0 && !holidays.includes(dateString)) {
       workingDays++;
     }
   }
@@ -46,7 +46,8 @@ export function calculateRemainingWorkingDays(today: Date, month: number, year: 
     const dayOfWeek = d.getDay();
     const dateString = d.toISOString().split('T')[0];
     
-    if (dayOfWeek !== 0 && dayOfWeek !== 6 && !holidays.includes(dateString)) {
+    // For a clothing store, only Sunday (0) is NOT a working day. Saturday (6) is an active working day.
+    if (dayOfWeek !== 0 && !holidays.includes(dateString)) {
       remaining++;
     }
   }

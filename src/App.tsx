@@ -7,22 +7,28 @@ import { VendedoraDashboard } from './pages/VendedoraDashboard';
 import { ReportsPage } from './pages/ReportsPage';
 import { TeamPage } from './pages/TeamPage';
 import { Toaster } from './components/ui/sonner';
+import { AuthProvider } from './contexts/AuthContext';
+import { DataProvider } from './contexts/DataContext';
 
 export default function App() {
   return (
-    <Router>
-      <Routes>
-        <Route element={<Layout />}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/minha-meta" element={<VendedoraDashboard />} />
-          <Route path="/configurar" element={<SettingsPage />} />
-          <Route path="/vendas" element={<SalesPage />} />
-          <Route path="/relatorios" element={<ReportsPage />} />
-          <Route path="/equipe" element={<TeamPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Route>
-      </Routes>
-      <Toaster />
-    </Router>
+    <AuthProvider>
+      <DataProvider>
+        <Router>
+          <Routes>
+            <Route element={<Layout />}>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/minha-meta" element={<VendedoraDashboard />} />
+              <Route path="/configurar" element={<SettingsPage />} />
+              <Route path="/vendas" element={<SalesPage />} />
+              <Route path="/relatorios" element={<ReportsPage />} />
+              <Route path="/equipe" element={<TeamPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Route>
+          </Routes>
+          <Toaster />
+        </Router>
+      </DataProvider>
+    </AuthProvider>
   );
 }

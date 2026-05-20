@@ -1,9 +1,11 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { Home, Target, Users, Settings, LogOut, DollarSign, BarChart2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 
 export function Layout() {
   const location = useLocation();
+  const { role: userRole, setRole } = useAuth();
 
   const navItems = [
     { label: 'Dashboard', path: '/', icon: Home, roles: ['admin', 'gerente'] },
@@ -15,7 +17,6 @@ export function Layout() {
   ];
 
   // In a real app we'd get this from useAuth context
-  const userRole = 'gerente'; // mock role for now
 
   const filteredNav = navItems.filter(item => item.roles.includes(userRole));
 
@@ -63,7 +64,30 @@ export function Layout() {
             </div>
             <span className="font-bold text-lg text-[#2F2F2F]">Meta Varejo</span>
           </div>
+          <select 
+            className="text-xs p-1 rounded border border-gray-300"
+            value={userRole}
+            onChange={(e) => setRole(e.target.value as any)}
+          >
+            <option value="admin">Admin</option>
+            <option value="gerente">Gerente</option>
+            <option value="vendedora">Vendedora</option>
+          </select>
         </header>
+
+        {/* Desktop Role Switcher (Mock) */}
+        <div className="hidden md:flex absolute top-4 right-8 z-50 items-center gap-2">
+           <span className="text-xs text-gray-400">Ver como:</span>
+           <select 
+            className="text-xs p-1 px-2 rounded-lg border border-gray-200 bg-white shadow-sm font-medium"
+            value={userRole}
+            onChange={(e) => setRole(e.target.value as any)}
+          >
+            <option value="admin">Admin</option>
+            <option value="gerente">Gerente</option>
+            <option value="vendedora">Vendedora</option>
+          </select>
+        </div>
 
         <Outlet />
       </main>

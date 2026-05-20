@@ -4,38 +4,20 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Check, Plus, Trash2 } from 'lucide-react';
+import { Check, Plus, Trash2, Percent } from 'lucide-react';
 import { toast } from 'sonner';
-
-interface Level {
-  id: string;
-  name: string;
-  amount: string;
-  reward: string;
-}
+import { useData } from '@/contexts/DataContext';
 
 export function SettingsPage() {
   const [distributionMode, setDistributionMode] = useState<string>('global');
   const [timeDistributionMode, setTimeDistributionMode] = useState<string>('mensal');
   
-  const [weeksTarget, setWeeksTarget] = useState([
-    { id: 1, name: 'Semana 1 (1 a 7)', target: '25000', percentage: '25' },
-    { id: 2, name: 'Semana 2 (8 a 14)', target: '25000', percentage: '25' },
-    { id: 3, name: 'Semana 3 (15 a 21)', target: '25000', percentage: '25' },
-    { id: 4, name: 'Semana 4 (22 a 31)', target: '25000', percentage: '25' },
-  ]);
-
-  const [sellersTarget, setSellersTarget] = useState([
-    { id: 1, name: 'Ana Paula', target: '25000', percentage: '25' },
-    { id: 2, name: 'Beatriz R.', target: '18500', percentage: '18.5' },
-    { id: 3, name: 'Carla T.', target: '18500', percentage: '18.5' },
-    { id: 4, name: 'Diana M.', target: '38000', percentage: '38' },
-  ]);
-
-  const [levels, setLevels] = useState<Level[]>([
-    { id: '1', name: 'Alvo', amount: '100000', reward: 'Comissão 1%' },
-    { id: '2', name: 'Desafio', amount: '120000', reward: 'Comissão 1.5% + Day off' },
-  ]);
+  const {
+    levels, setLevels,
+    baseCommission, setBaseCommission,
+    sellersTarget, setSellersTarget,
+    weeksTarget, setWeeksTarget
+  } = useData();
 
   const storeGoal = Number(levels[0]?.amount) || 0;
   const totalPercentage = sellersTarget.reduce((acc, curr) => acc + Number(curr.percentage || 0), 0);
@@ -49,7 +31,7 @@ export function SettingsPage() {
       toast.error('Limite máximo de 4 níveis atingido.');
       return;
     }
-    setLevels([...levels, { id: Math.random().toString(), name: '', amount: '', reward: '' }]);
+    setLevels([...levels, { id: Math.random().toString(), name: '', amount: '', reward: '', commission: '1.0' }]);
   };
 
   const removeLevel = (id: string) => {
@@ -57,32 +39,60 @@ export function SettingsPage() {
     setLevels(levels.filter(l => l.id !== id));
   };
 
-  const updateLevel = (id: string, field: keyof Level, value: string) => {
+  const updateLevel = (id: string, field: 'name' | 'amount' | 'reward' | 'commission', value: string) => {
     setLevels(levels.map(l => l.id === id ? { ...l, [field]: value } : l));
   };
 
   const saveSettings = () => {
-    toast.success('Metas configuradas com sucesso!');
+    // Validation
+    const invalidLevels = levels.some(l => !l.name || Number(l.amount) <= 0 || Number(l.commission) < 0);
+    if (invalidLevels) {
+      toast.error('Preencha nomes, valores e porcentagens de comissões válidas para todos os níveis.');
+      return;
+    }
+    
+    if (Number(baseCommission) < 0) {
+      toast.error('A comissão base deve ser valor positivo ou zero.');
+      return;
+    }
+    
+    if (distributionMode === 'individual') {
+      const invalidSellers = sellersTarget.some(s => Number(s.target) < 0 || Number(s.percentage) < 0 || Number(s.percentage) > 100);
+      if (invalidSellers || totalPercentage > 100.1 || totalPercentage < 99.9) {
+         toast.error('A distribuição individual deve somar exatamente 100% e os valores devem ser positivos.');
+         return;
+      }
+    }
+    
+    if (timeDistributionMode === 'semanal') {
+      const invalidWeeks = weeksTarget.some(w => Number(w.target) < 0 || Number(w.percentage) < 0 || Number(w.percentage) > 100);
+      if (invalidWeeks || totalWeeklyPercentage > 100.1 || totalWeeklyPercentage < 99.9) {
+         toast.error('A distribuição semanal deve somar exatamente 100% e os valores devem ser positivos.');
+         return;
+      }
+    }
+
+    toast.success('Metas e comissões salvas com sucesso!');
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="w-full max-w-5xl mx-auto space-y-6 px-4 pb-20">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Configurar Metas</h1>
-        <p className="text-gray-500">Defina os objetivos mensais e os níveis de recompensa.</p>
+        <h1 className="text-2xl font-bold tracking-tight text-[#111111]">Configurar Metas</h1>
+        <p className="text-gray-500 text-sm">Defina os objetivos mensais e os níveis de recompensa.</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Configurações Gerais</CardTitle>
+      <Card className="rounded-3xl border border-gray-200 shadow-sm overflow-hidden bg-white">
+        <CardHeader className="bg-gray-50/50">
+          <CardTitle className="text-lg">Configurações Gerais</CardTitle>
           <CardDescription>Parâmetros base para as metas do período.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+        <CardContent className="space-y-4 pt-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Mês Base</Label>
               <Select defaultValue="05-2026">
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Selecione o mês" />
                 </SelectTrigger>
                 <SelectContent>
@@ -95,7 +105,7 @@ export function SettingsPage() {
             <div className="space-y-2">
               <Label>Loja</Label>
               <Select defaultValue="loja-centro">
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Selecione a loja" />
                 </SelectTrigger>
                 <SelectContent>
@@ -108,9 +118,9 @@ export function SettingsPage() {
           
           <div className="space-y-2 border-t pt-4 mt-4">
             <Label className="text-base font-bold">Distribuição da Meta por Vendedora</Label>
-            <p className="text-xs text-gray-500 mb-2">Escolha se a meta será definida globalmente para a loja ou individualmente por vendedora.</p>
+            <p className="text-xs text-gray-400 mb-2">Escolha se a meta será definida globalmente para a loja ou individualmente por vendedora.</p>
             <Select value={distributionMode} onValueChange={setDistributionMode}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Selecione o modo de distribuição" />
               </SelectTrigger>
               <SelectContent>
@@ -122,9 +132,9 @@ export function SettingsPage() {
 
           <div className="space-y-2 border-t pt-4 mt-4">
             <Label className="text-base font-bold">Distribuição da Meta no Tempo (Semanal)</Label>
-            <p className="text-xs text-gray-500 mb-2">Escolha a visão de acompanhamento (Linear Mensal ou Personalizado por Semana).</p>
+            <p className="text-xs text-gray-400 mb-2">Escolha a visão de acompanhamento (Linear Mensal ou Personalizado por Semana).</p>
             <Select value={timeDistributionMode} onValueChange={setTimeDistributionMode}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Selecione o modo no tempo" />
               </SelectTrigger>
               <SelectContent>
@@ -136,28 +146,52 @@ export function SettingsPage() {
 
           <div className="space-y-2 border-t pt-4">
             <Label>Dias Úteis no Mês</Label>
-            <Input defaultValue="24" readOnly className="bg-gray-50" />
-            <p className="text-xs text-gray-500">Calculado automaticamente descontando feriados e domingos.</p>
+            <Input defaultValue="24" readOnly className="bg-gray-50 border-gray-200 text-gray-500 font-bold" />
+            <p className="text-xs text-gray-450">Calculado automaticamente descontando feriados e domingos.</p>
           </div>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+      <Card className="rounded-3xl border border-gray-200 shadow-sm overflow-hidden bg-white">
+        <CardHeader className="flex flex-row items-center justify-between bg-gray-50/50">
           <div>
-            <CardTitle>Níveis da Meta (Gamificação)</CardTitle>
-            <CardDescription>Configure de 2 a 4 níveis progressivos.</CardDescription>
+            <CardTitle className="text-lg">Níveis da Meta (Gamificação)</CardTitle>
+            <CardDescription>Configure de 2 a 4 níveis progressivos com suas respectivas comissões.</CardDescription>
           </div>
-          <Button onClick={addLevel} variant="outline" size="sm" className="flex items-center gap-1">
+          <Button onClick={addLevel} variant="outline" size="sm" className="flex items-center gap-1 border-gray-200">
             <Plus className="w-4 h-4" /> Adicionar Nível
           </Button>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-6 pt-6">
+          <div className="p-4 bg-amber-50 border border-amber-200/60 rounded-2xl mb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <h4 className="font-bold text-sm text-amber-800">Comissão Base de Vendas (Sem Meta)</h4>
+              <p className="text-xs text-amber-700/80">Percentual padrão pago de comissão caso a vendedora ou a loja não atinja nenhum nível estipulado no mês.</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="relative w-32">
+                <Input 
+                  type="number" 
+                  step="0.1" 
+                  value={baseCommission} 
+                  onChange={e => setBaseCommission(e.target.value)} 
+                  className="pr-8 bg-white border-amber-200 font-bold"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-black">%</span>
+              </div>
+            </div>
+          </div>
+
           {levels.map((level, index) => (
-            <div key={level.id} className="p-4 border rounded-lg bg-gray-50/50 space-y-4 relative group">
+            <div key={level.id} className="p-4 border rounded-2xl bg-gray-50/50 space-y-4 relative group hover:border-[#D4AF37]/40 transition-colors">
               <div className="flex items-center justify-between mb-2">
-                <h4 className="font-semibold text-gray-700">Nível {index + 1}</h4>
-                {levels.length > 1 && (
+                <h4 className="font-bold text-sm text-gray-800 flex items-center gap-2">
+                  <span className="inline-flex w-5 h-5 bg-[#111111] text-[#D4AF37] font-black items-center justify-center rounded-full text-xs">
+                    {index + 1}
+                  </span>
+                  Configurações para {level.name || `Nível ${index + 1}`}
+                </h4>
+                {levels.length > 2 && (
                   <Button 
                     variant="ghost" 
                     size="icon" 
@@ -170,7 +204,7 @@ export function SettingsPage() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Nome do Nível</Label>
+                  <Label className="text-xs text-gray-500 font-bold">Nome do Nível</Label>
                   <Input 
                     placeholder="Ex: Alvo, Superação, Diamante" 
                     value={level.name}
@@ -178,7 +212,7 @@ export function SettingsPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Valor da Meta (R$)</Label>
+                  <Label className="text-xs text-gray-500 font-bold">Valor da Meta (R$)</Label>
                   <Input 
                     type="number" 
                     placeholder="Ex: 50000"
@@ -186,10 +220,24 @@ export function SettingsPage() {
                     onChange={(e) => updateLevel(level.id, 'amount', e.target.value)}
                   />
                 </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label>Recompensa (Opcional)</Label>
+                <div className="space-y-2">
+                  <Label className="text-xs text-gray-500 font-bold">Comissão do Nível (%)</Label>
+                  <div className="relative">
+                    <Input 
+                      type="number" 
+                      step="0.1" 
+                      placeholder="Ex: 1.5"
+                      value={level.commission || ''}
+                      onChange={(e) => updateLevel(level.id, 'commission', e.target.value)}
+                      className="pr-8"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-black">%</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-gray-500 font-bold">Recompensa Adicional (Opcional)</Label>
                   <Input 
-                    placeholder="Ex: Folga, Prêmio R$200, Comissão maior"
+                    placeholder="Ex: Folga, Prêmio R$200, Viagem"
                     value={level.reward}
                     onChange={(e) => updateLevel(level.id, 'reward', e.target.value)}
                   />
@@ -231,6 +279,7 @@ export function SettingsPage() {
                       <Label className="text-xs text-gray-400">Valor (R$)</Label>
                       <Input 
                         type="number" 
+                        min="0"
                         value={seller.target}
                         onChange={(e) => {
                           const valStr = e.target.value;
@@ -251,6 +300,8 @@ export function SettingsPage() {
                       <div className="relative">
                         <Input 
                           type="number" 
+                          min="0"
+                          max="100"
                           className="pr-8"
                           value={seller.percentage}
                           onChange={(e) => {
@@ -308,6 +359,7 @@ export function SettingsPage() {
                       <Label className="text-xs text-gray-400">Valor (R$)</Label>
                       <Input 
                         type="number" 
+                        min="0"
                         value={week.target}
                         onChange={(e) => {
                           const valStr = e.target.value;
@@ -327,7 +379,9 @@ export function SettingsPage() {
                       <Label className="text-xs text-gray-400">Percentual (%)</Label>
                       <div className="relative">
                         <Input 
-                          type="number" 
+                          type="number"
+                          min="0"
+                          max="100" 
                           className="pr-8"
                           value={week.percentage}
                           onChange={(e) => {
@@ -351,14 +405,46 @@ export function SettingsPage() {
               </div>
             </div>
           )}
-          
-          <div className="pt-4 flex justify-end mt-4">
-            <Button onClick={saveSettings} className="bg-[#111111] text-[#D4AF37] hover:bg-[#222]">
-              <Check className="mr-2 h-4 w-4" /> Salvar Configurações
-            </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-3xl border border-gray-200 shadow-sm overflow-hidden bg-white">
+        <CardHeader className="bg-gray-50/50">
+          <CardTitle className="text-lg">Notificações e Alertas</CardTitle>
+          <CardDescription>Configure avisos quando a vendedora ou loja atingir uma certa porcentagem da meta mensal.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 pt-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Canais de Notificação</Label>
+              <Select defaultValue="in-app-email">
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Selecione os canais..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="in-app">Apenas no Aplicativo</SelectItem>
+                  <SelectItem value="email">Apenas por E-mail</SelectItem>
+                  <SelectItem value="in-app-email">E-mail e Aplicativo</SelectItem>
+                  <SelectItem value="none">Desativado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Disparar alerta ao atingir (%) da meta</Label>
+              <div className="relative">
+                <Input type="number" defaultValue="80" max="100" min="1" className="pr-8" />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">%</span>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
+      
+      <div className="mt-6 flex justify-end">
+        <Button onClick={saveSettings} className="bg-[#111111] text-[#D4AF37] hover:bg-[#222] font-bold">
+          <Check className="mr-2 h-4 w-4" /> Salvar Configurações
+        </Button>
+      </div>
     </div>
   );
 }

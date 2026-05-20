@@ -16,7 +16,7 @@ export function VendedoraDashboard() {
   const totalVendidas = 142; // mock value
 
   return (
-    <div className="flex flex-col h-full gap-6 pb-16 md:pb-0 font-sans max-w-5xl mx-auto w-full">
+    <div className="flex flex-col h-auto min-h-full gap-6 pb-16 md:pb-10 font-sans max-w-5xl mx-auto w-full">
       <header className="flex items-center justify-between shrink-0">
         <div className="flex flex-col gap-1">
           <h1 className="text-3xl font-bold text-[#111111] tracking-tight">Olá, Mariana!</h1>
