@@ -15,9 +15,16 @@ import {
   Percent, 
   Zap,
   TrendingDown,
-  Activity
+  Activity,
+  Phone,
+  Clock,
+  AlertTriangle,
+  ShieldAlert,
+  ThumbsUp,
+  MessageSquare
 } from 'lucide-react';
 import { formatCurrency, calculateRemainingWorkingDays } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 import { motion, AnimatePresence } from 'motion/react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, Cell } from 'recharts';
 import { useData } from '@/contexts/DataContext';
@@ -34,7 +41,7 @@ const fallbackWeeklyData = [
 ];
 
 export function Dashboard() {
-  const { sales, sellers, levels, sellersTarget, stores, activeStoreFilter, setActiveStoreFilter } = useData();
+  const { sales, sellers, levels, sellersTarget, stores, activeStoreFilter, setActiveStoreFilter, postSales, followUps, selectedPeriod, setSelectedPeriod, periods } = useData();
   const [animatedValue, setAnimatedValue] = useState(0);
   const [viewMode, setViewMode] = useState<'mensal' | 'semanal'>('mensal');
 
@@ -55,23 +62,27 @@ export function Dashboard() {
 
   // 1. Dynamic Seller KPIs from Context
   const sellersData = useMemo(() => {
-    const isTodaySim = new Date('2026-05-20T17:35:57Z');
-    const simYear = isTodaySim.getFullYear();
-    const simMonth = isTodaySim.getMonth();
+    const [yearStr, monthStr] = selectedPeriod.split('-');
+    const simYear = parseInt(yearStr, 10);
+    const simMonth = parseInt(monthStr, 10) - 1;
 
     return sellers.map(seller => {
       // Filter sales for this seller
       let fs = sales.filter(s => s.vendedora === seller.name);
       // Filter by active store
-      const isStoreActiveObj = activeStoreFilter === 'todas' || seller.storeId === activeStoreFilter;
+      const isStoreActiveObj = activeStoreFilter === 'todas' || seller.storeId === 'ambas' || seller.storeId === activeStoreFilter;
       if (!isStoreActiveObj) return { ...seller, totalVendido: 0, totalPecas: 0, totalClientes: 0, totalVendas: 0, totalCondicionais: 0, ticketMedio: 0, taxaConversao: 0, individualTarget: 25000, isStoreActiveObj: false };
 
       // Period Sales
       const periodSales = fs.filter(s => {
+        if (activeStoreFilter !== 'todas' && s.storeId !== activeStoreFilter) {
+          return false;
+        }
         const d = new Date(s.date);
         if (viewMode === 'mensal') {
           return d.getFullYear() === simYear && d.getMonth() === simMonth;
         } else {
+          const isTodaySim = new Date('2026-05-20T17:35:57Z');
           const sevenAgo = new Date(isTodaySim.getTime() - 7 * 24 * 60 * 60 * 1000);
           return d >= sevenAgo && d <= isTodaySim;
         }
@@ -82,6 +93,9 @@ export function Dashboard() {
       const totalClientes = periodSales.reduce((acc, curr) => acc + (curr.clientesAtendidos || 0), 0);
       const totalVendas = periodSales.reduce((acc, curr) => acc + (curr.vendasFeitas || 0), 0);
       const totalCondicionais = periodSales.reduce((acc, curr) => acc + (curr.condicionaisEnviadas || 0), 0);
+      const totalPosVendas = periodSales.reduce((acc, curr) => acc + (curr.posVendasFeitos || 0), 0);
+      const totalFollowUps = periodSales.reduce((acc, curr) => acc + (curr.followUpsFeitos || 0), 0);
+      const totalNovasMensagens = periodSales.reduce((acc, curr) => acc + (curr.novasMensagensEnviadas || 0), 0);
 
       const ticketMedio = totalVendas > 0 ? totalVendido / totalVendas : 0;
       const taxaConversao = totalClientes > 0 ? (totalVendas / totalClientes) * 100 : 0;
@@ -97,6 +111,9 @@ export function Dashboard() {
         totalClientes,
         totalVendas,
         totalCondicionais,
+        totalPosVendas,
+        totalFollowUps,
+        totalNovasMensagens,
         ticketMedio,
         taxaConversao,
         individualTarget,
@@ -116,7 +133,7 @@ export function Dashboard() {
 
   // Overall store stats
   const activeSellersInStore = useMemo(() => {
-    return sellers.filter(s => activeStoreFilter === 'todas' || s.storeId === activeStoreFilter);
+    return sellers.filter(s => activeStoreFilter === 'todas' || s.storeId === 'ambas' || s.storeId === activeStoreFilter);
   }, [sellers, activeStoreFilter]);
 
   const monthTargetBase = useMemo(() => {
@@ -145,12 +162,16 @@ export function Dashboard() {
 
   // Remaining days (simulated May 20, 2026, May ends in 31)
   const diasRestantes = useMemo(() => {
+    const [yearStr, monthStr] = selectedPeriod.split('-');
+    const simYear = parseInt(yearStr, 10);
+    const simMonth = parseInt(monthStr, 10) - 1;
+
     if (viewMode === 'mensal') {
       const todaySim = new Date('2026-05-20T17:35:57Z');
-      return calculateRemainingWorkingDays(todaySim, 4, 2026, []); // Month index 4 is May
+      return calculateRemainingWorkingDays(todaySim, simMonth, simYear, []);
     }
     return 2; // Default for weekly
-  }, [viewMode]);
+  }, [viewMode, selectedPeriod]);
 
   const metaDiaria = (target - realized) > 0 ? (target - realized) / diasRestantes : 0;
 
@@ -181,24 +202,27 @@ export function Dashboard() {
 
   // Dynamic charts
   const dynamicMonthlyChart = useMemo(() => {
-    const isTodaySim = new Date('2026-05-20T17:35:57Z');
+    const [yearStr, monthStr] = selectedPeriod.split('-');
+    const simYear = parseInt(yearStr, 10);
+    const simMonth = parseInt(monthStr, 10) - 1;
+
+    const totalDaysInMonth = new Date(simYear, simMonth + 1, 0).getDate();
+
     const dayAgg: { [key: string]: number } = {};
-    for (let i = 1; i <= 20; i++) {
+    for (let i = 1; i <= totalDaysInMonth; i++) {
        dayAgg[i.toString().padStart(2, '0')] = 0;
     }
     const storeSales = sales.filter(s => activeStoreFilter === 'todas' || s.storeId === activeStoreFilter);
     storeSales.forEach(s => {
       const d = new Date(s.date);
-      if (d.getFullYear() === 2026 && d.getMonth() === 4) {
+      if (d.getFullYear() === simYear && d.getMonth() === simMonth) {
         const dayStr = d.getDate().toString().padStart(2, '0');
-        if (Number(dayStr) <= 20) {
-          dayAgg[dayStr] = (dayAgg[dayStr] || 0) + s.amount;
-        }
+        dayAgg[dayStr] = (dayAgg[dayStr] || 0) + s.amount;
       }
     });
     const result = Object.keys(dayAgg).sort().map(d => ({ day: d, sales: dayAgg[d] }));
     return result.some(item => item.sales > 0) ? result : fallbackData;
-  }, [sales, activeStoreFilter]);
+  }, [sales, activeStoreFilter, selectedPeriod]);
 
   const dynamicWeeklyChart = useMemo(() => {
     const daysAbbrev = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -285,20 +309,32 @@ export function Dashboard() {
                 </span>
               </h1>
             )}
-            <select
-              value={activeStoreFilter}
-              onChange={(e) => setActiveStoreFilter(e.target.value)}
-              className="bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm font-semibold text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-            >
-              <option value="todas">Todas as Lojas</option>
-              {stores.map(store => (
-                <option key={store.id} value={store.id}>{store.name}</option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2 flex-wrap">
+              <select
+                value={activeStoreFilter}
+                onChange={(e) => setActiveStoreFilter(e.target.value)}
+                className="bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm font-semibold text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
+              >
+                <option value="todas">Todas as Lojas</option>
+                {stores.map(store => (
+                  <option key={store.id} value={store.id}>{store.name}</option>
+                ))}
+              </select>
+
+              <select
+                value={selectedPeriod}
+                onChange={(e) => setSelectedPeriod(e.target.value)}
+                className="bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm font-bold text-gray-750 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
+              >
+                {periods.map(period => (
+                  <option key={period.value} value={period.value}>{period.label}</option>
+                ))}
+              </select>
+            </div>
           </div>
           <div className="flex items-center gap-3 mt-1">
             <p className="text-sm text-[#D4AF37] font-bold uppercase tracking-widest">
-              {activeStoreFilter === 'todas' ? 'Geral' : stores.find(s => s.id === activeStoreFilter)?.name} • {viewMode === 'mensal' ? 'Maio de 2026' : 'Semana de Lançamentos'}
+              {activeStoreFilter === 'todas' ? 'Geral' : stores.find(s => s.id === activeStoreFilter)?.name} • {viewMode === 'mensal' ? (periods.find(p => p.value === selectedPeriod)?.label || selectedPeriod) : 'Semana de Lançamentos'}
             </p>
             <div className="flex items-center bg-gray-100 rounded-md p-0.5">
               <button
@@ -458,7 +494,7 @@ export function Dashboard() {
       </div>
 
       {/* DETALHAMENTO COMPLETO DAS VENDEDORAS */}
-      <div className="bg-[#0b0c10] border border-cyan-950 rounded-3xl p-6 sm:p-8 shadow-[0_0_50px_rgba(0,0,0,0.8)] relative overflow-visible select-none">
+      <div className="bg-gradient-to-br from-[#121622] via-[#0b0d12] to-[#040507] border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-[0_4px_30px_rgba(0,0,0,0.4)] relative overflow-visible select-none">
         {/* Glow lasers */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-4/5 h-[1px] bg-gradient-to-r from-transparent via-cyan-500 to-transparent shadow-[0_0_15px_#22d3ee] animate-pulse" />
         <div className="absolute -left-10 top-1/3 w-64 h-64 bg-purple-600/10 rounded-full filter blur-[120px] pointer-events-none" />
@@ -689,28 +725,23 @@ export function Dashboard() {
                     {/* DADOS DETALHADOS REVERSOS (Atendimento, Vendas, Itens, Condicional) */}
                     <div className="space-y-3">
                       {/* Atendimento */}
-                      <div className="space-y-1">
-                        <div className="flex justify-between items-center text-xs sm:text-sm font-bold uppercase tracking-wide leading-none">
-                          <span className="text-purple-400 flex items-center gap-1.5">
-                            <Users className="w-4 h-4 text-purple-400 shrink-0" /> Atendimentos
-                          </span>
-                          <span className="text-purple-300 font-mono text-sm font-black">
-                            {seller.totalClientes} cli. <span className="text-[11px] text-zinc-400 font-bold ml-1">({attendanceShare.toFixed(1)}%)</span>
-                          </span>
-                        </div>
-                        <div className="h-1.5 w-full bg-zinc-900/60 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full bg-gradient-to-r from-purple-600 to-indigo-500" style={{ width: `${Math.min(100, attendanceShare)}%` }} />
-                        </div>
+                      <div className="flex justify-between items-center text-xs sm:text-sm font-bold uppercase tracking-wide leading-none py-1">
+                        <span className="text-purple-400 flex items-center gap-1.5">
+                          <Users className="w-4 h-4 text-purple-400 shrink-0" /> Atendimentos
+                        </span>
+                        <span className="text-purple-300 font-mono text-sm font-black">
+                          {seller.totalClientes} cli.
+                        </span>
                       </div>
 
                       {/* Vendas */}
                       <div className="space-y-1">
                         <div className="flex justify-between items-center text-xs sm:text-sm font-bold uppercase tracking-wide leading-none">
                           <span className="text-emerald-400 flex items-center gap-1.5">
-                            <ShoppingBag className="w-4 h-4 text-emerald-400 shrink-0" /> Vendas
+                            <ShoppingBag className="w-4 h-4 text-emerald-400 shrink-0" /> Vendas (Conversão)
                           </span>
                           <span className="text-emerald-300 font-mono text-sm font-black">
-                            {seller.totalVendas} un. <span className="text-[11px] text-zinc-400 font-bold ml-1">({conversionRate.toFixed(1)}% conv)</span>
+                            {seller.totalVendas} un. <span className="text-[11px] text-[#A3E635] font-bold ml-1">({conversionRate.toFixed(1)}%)</span>
                           </span>
                         </div>
                         <div className="h-1.5 w-full bg-zinc-900/60 rounded-full overflow-hidden">
@@ -719,33 +750,23 @@ export function Dashboard() {
                       </div>
 
                       {/* Itens */}
-                      <div className="space-y-1">
-                        <div className="flex justify-between items-center text-xs sm:text-sm font-bold uppercase tracking-wide leading-none">
-                          <span className="text-amber-400 flex items-center gap-1.5">
-                            <Package className="w-4 h-4 text-amber-500 shrink-0" /> Itens / Peças
-                          </span>
-                          <span className="text-amber-350 font-mono text-sm font-black">
-                            {seller.totalPecas} un. <span className="text-[11px] text-zinc-400 font-bold ml-1">({piecesShare.toFixed(1)}%)</span>
-                          </span>
-                        </div>
-                        <div className="h-1.5 w-full bg-zinc-900/60 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-400" style={{ width: `${Math.min(100, piecesShare)}%` }} />
-                        </div>
+                      <div className="flex justify-between items-center text-xs sm:text-sm font-bold uppercase tracking-wide leading-none py-1">
+                        <span className="text-amber-400 flex items-center gap-1.5">
+                          <Package className="w-4 h-4 text-amber-500 shrink-0" /> Itens / Peças
+                        </span>
+                        <span className="text-amber-350 font-mono text-sm font-black">
+                          {seller.totalPecas} un.
+                        </span>
                       </div>
 
                       {/* Condicional */}
-                      <div className="space-y-1">
-                        <div className="flex justify-between items-center text-xs sm:text-sm font-bold uppercase tracking-wide leading-none">
-                          <span className="text-pink-400 flex items-center gap-1.5">
-                            <RefreshCw className="w-3.5 h-3.5 text-pink-400 shrink-0" /> Condicionais
-                          </span>
-                          <span className="text-pink-300 font-mono text-sm font-black">
-                            {seller.totalCondicionais} env. <span className="text-[11px] text-zinc-400 font-bold ml-1">({conditionalShare.toFixed(1)}%)</span>
-                          </span>
-                        </div>
-                        <div className="h-1.5 w-full bg-zinc-900/60 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full bg-gradient-to-r from-pink-500 to-fuchsia-400" style={{ width: `${Math.min(100, conditionalShare)}%` }} />
-                        </div>
+                      <div className="flex justify-between items-center text-xs sm:text-sm font-bold uppercase tracking-wide leading-none py-1">
+                        <span className="text-pink-400 flex items-center gap-1.5">
+                          <RefreshCw className="w-3.5 h-3.5 text-pink-400 shrink-0" /> Condicionais
+                        </span>
+                        <span className="text-pink-300 font-mono text-sm font-black">
+                          {seller.totalCondicionais} env.
+                        </span>
                       </div>
                     </div>
 
@@ -907,6 +928,130 @@ export function Dashboard() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* ACOMPANHAMENTO DE RELACIONAMENTO ADMINISTRATIVO (PÓS-VENDAS & FOLLOW-UP) */}
+      <div className="bg-[#0b0c10] border border-cyan-950/80 rounded-3xl p-6 sm:p-8 shadow-[0_4px_30px_rgba(0,0,0,0.5)] relative overflow-hidden select-none">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/5 rounded-full filter blur-[80px] pointer-events-none" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-4/5 h-[1px] bg-gradient-to-r from-transparent via-cyan-500 to-transparent shadow-[0_0_15px_#22d3ee] animate-pulse" />
+        
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 border-b border-cyan-950/50 pb-5">
+          <div className="space-y-1">
+            <h3 className="text-sm uppercase font-black tracking-widest text-[#22d3ee] flex items-center gap-2">
+              <Phone className="w-4 h-4 text-cyan-400" /> Acompanhamento de Relacionamento & Metas Adicionais
+            </h3>
+            <p className="text-xs text-zinc-400 font-medium">
+              Monitoramento em tempo real do Pós-Venda Diário e do Acompanhamento de Vendas Paradas (Follow-Up).
+            </p>
+          </div>
+          <div className="flex items-center gap-2 bg-zinc-950 px-3.5 py-1.5 rounded-2xl border border-cyan-950/60 text-[11px] font-bold text-zinc-300">
+            <span>Meta Diária de Pós-Vendas:</span>
+            <Badge className="bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 text-[10px] font-black rounded-md">
+              Mín. 3 contatos/dia
+            </Badge>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+          
+          {/* COMPLIANCE DAS COLEGAS DE EQUIPE */}
+          <div className="lg:col-span-5 bg-zinc-950/60 border border-zinc-900 rounded-2xl p-5 flex flex-col justify-between gap-4">
+            <div>
+              <span className="text-[10px] font-black uppercase text-zinc-400 tracking-wider flex items-center gap-1.5 mb-4">
+                🎯 Compliance de Pós-Vendas de Hoje
+              </span>
+              
+              <div className="space-y-4">
+                {sellers.filter(s => s.role === 'Vendedora').map(seller => {
+                  const todayStr = new Date().toISOString().split('T')[0];
+                  const doneToday = postSales.filter(ps => ps.vendedora === seller.name && ps.date === todayStr).length;
+                  const ratio = (doneToday / 3) * 100;
+                  const hasBeaten = doneToday >= 3;
+
+                  return (
+                    <div key={seller.id} className="space-y-1.5">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="font-extrabold text-zinc-100">{seller.name}</span>
+                        <span className={`font-mono font-bold ${hasBeaten ? 'text-emerald-400' : 'text-cyan-400'}`}>
+                          {doneToday} de 3 {hasBeaten ? '🏆' : ''}
+                        </span>
+                      </div>
+                      <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden flex">
+                        <div 
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            hasBeaten 
+                              ? 'bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_8px_#34d399]' 
+                              : 'bg-gradient-to-r from-cyan-500 to-purple-500'
+                          }`} 
+                          style={{ width: `${Math.min(100, ratio)}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-zinc-900/40 text-[10px] text-zinc-500 font-medium">
+              💡 Esse dashboard incentiva o monitoramento saudável. Pós-vendas de hoje já estão incluídos no controle diário da vendedora.
+            </div>
+          </div>
+
+          {/* PAINEL DE METRICAS DE VENDAS PARADAS (FOLLOW-UP) */}
+          <div className="lg:col-span-7 bg-zinc-950/60 border border-zinc-900 rounded-2xl p-5 flex flex-col justify-between gap-4">
+            <div>
+              <span className="text-[10px] font-black uppercase text-zinc-400 tracking-wider flex items-center gap-1.5 mb-3">
+                ⏳ Visão Geral de Vendas Paradas (Follow-up)
+              </span>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
+                <div className="bg-zinc-900/60 border border-cyan-950 p-3 rounded-xl">
+                  <span className="text-[9px] uppercase font-bold text-zinc-400 tracking-wider">Acompanhando</span>
+                  <p className="text-xl font-black text-zinc-100 mt-1 font-mono">{followUps.filter(f => f.status === 'Pendente' || f.status === 'Contatado').length}</p>
+                </div>
+                <div className="bg-zinc-900/60 border border-rose-950/50 p-3 rounded-xl">
+                  <span className="text-[9px] uppercase font-bold text-rose-400 tracking-wider">Alto Risco (7d+)</span>
+                  <p className="text-xl font-black text-rose-400 mt-1 font-mono">{followUps.filter(f => f.status === 'Pendente' && f.daysStuck >= 7).length}</p>
+                </div>
+                <div className="bg-zinc-900/60 border border-emerald-950/50 p-3 rounded-xl">
+                  <span className="text-[9px] uppercase font-bold text-emerald-400 tracking-wider">Recuperadas (Mês)</span>
+                  <p className="text-xl font-black text-emerald-400 mt-1 font-mono">{followUps.filter(f => f.status === 'Vendido (Recuperado)').length}</p>
+                </div>
+              </div>
+
+              {/* LISTA RESUMIDA DAS CLIENTES PARADAS MAIS CRÍTICAS */}
+              <div className="space-y-2">
+                <span className="text-[9px] uppercase font-bold text-zinc-500 tracking-wider">Vendas paradas mais críticas (Atenção urgente)</span>
+                
+                <div className="max-h-32 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
+                  {followUps.filter(fu => fu.status === 'Pendente').sort((a,b) => b.daysStuck - a.daysStuck).slice(0, 3).map(fu => (
+                    <div key={fu.id} className="flex justify-between items-center text-xs p-2 bg-zinc-950 border border-zinc-900 rounded-lg hover:border-cyan-900/40 transition-colors">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-extrabold text-zinc-200">{fu.clientName}</span>
+                          <span className="text-[9px] text-[#22d3ee] font-mono">({fu.vendedora})</span>
+                        </div>
+                        <p className="text-[9px] text-zinc-500 max-w-sm truncate">{fu.notes}</p>
+                      </div>
+                      <Badge className="bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[9px] font-black rounded-md">
+                        {fu.daysStuck} dias parado
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center text-xs mt-3 pt-3 border-t border-zinc-900/40">
+              <span className="text-[10px] text-zinc-400 font-medium">Soma do potencial de vendas paradas hoje:</span>
+              <span className="font-mono text-cyan-400 font-extrabold text-xs">
+                {formatCurrency(followUps.filter(f => f.status === 'Pendente').reduce((acc, curr) => acc + (curr.stuckValue || 0), 0))}
+              </span>
+            </div>
+          </div>
+
+        </div>
+
       </div>
 
       {/* Gráficos de Evolução Diária & Forecast Estimado */}

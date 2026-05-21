@@ -144,7 +144,7 @@ export function TeamPage() {
                       </div>
                       <span className="whitespace-nowrap">{member.name}</span>
                     </TableCell>
-                    <TableCell className="text-gray-500">{stores.find(s => s.id === member.storeId)?.name || 'N/A'}</TableCell>
+                    <TableCell className="text-gray-500">{member.storeId === 'ambas' ? 'Ambas as Lojas' : (stores.find(s => s.id === member.storeId)?.name || 'N/A')}</TableCell>
                     <TableCell className="text-gray-500 whitespace-nowrap">{member.email}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className={member.role === 'Gerente' ? 'border-[#D4AF37] text-[#8c7424]' : 'bg-gray-100 text-gray-600'}>
@@ -236,6 +236,7 @@ export function TeamPage() {
                 <SelectTrigger><SelectValue placeholder="Selecione a loja..." /></SelectTrigger>
                 <SelectContent>
                   {stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                  <SelectItem value="ambas">Ambas as Lojas</SelectItem>
                 </SelectContent>
               </Select>
             </div>

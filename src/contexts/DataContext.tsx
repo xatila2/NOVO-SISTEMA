@@ -26,6 +26,9 @@ export interface Sale {
   vendasFeitas?: number;
   condicionaisEnviadas?: number;
   pecasVendidas?: number;
+  posVendasFeitos?: number;
+  followUpsFeitos?: number;
+  novasMensagensEnviadas?: number;
   item?: string;
 }
 
@@ -48,6 +51,30 @@ export interface Level {
   commission: string; // customizable commission rate percentage, e.g. "1.5"
 }
 
+export interface PostSale {
+  id: string;
+  date: string; // YYYY-MM-DD
+  vendedora: string;
+  clientName: string;
+  clientContact?: string;
+  notes: string;
+  status: 'Feliz / Satisfeito' | 'Dúvida / Ajuste' | 'Sem Retorno' | 'Pendente';
+  type: 'Pós-Venda 15 dias' | 'Pós-Venda 30 dias' | 'Feedback' | 'Outra';
+}
+
+export interface FollowUp {
+  id: string;
+  date: string; // YYYY-MM-DD
+  vendedora: string;
+  clientName: string;
+  clientContact?: string;
+  daysStuck: number;
+  lastContact: string; // YYYY-MM-DD
+  stuckValue?: number;
+  notes: string;
+  status: 'Pendente' | 'Contatado' | 'Vendido (Recuperado)' | 'Perdido / Sem Retorno';
+}
+
 interface DataContextType {
   stores: Store[];
   addStore: (store: Omit<Store, 'id'>) => void;
@@ -63,9 +90,23 @@ interface DataContextType {
   addSale: (sale: Omit<Sale, 'id'>, callerRole?: string) => void;
   updateSale: (id: string, sale: Partial<Sale>, callerRole?: string) => void;
   deleteSale: (id: string, callerRole?: string) => void;
+
+  postSales: PostSale[];
+  addPostSale: (postSale: Omit<PostSale, 'id'>) => void;
+  updatePostSale: (id: string, postSale: Partial<PostSale>) => void;
+  deletePostSale: (id: string) => void;
+
+  followUps: FollowUp[];
+  addFollowUp: (followUp: Omit<FollowUp, 'id'>) => void;
+  updateFollowUp: (id: string, followUp: Partial<FollowUp>) => void;
+  deleteFollowUp: (id: string) => void;
   
   activeStoreFilter: string;
   setActiveStoreFilter: (id: string) => void;
+
+  selectedPeriod: string;
+  setSelectedPeriod: (period: string) => void;
+  periods: { value: string; label: string }[];
 
   auditLogs: AuditLog[];
   addAuditLog: (log: Omit<AuditLog, 'id' | 'timestamp'>) => void;
@@ -111,6 +152,9 @@ const generateMockSales = (sellers: Seller[], stores: Store[]) => {
     const condicionaisEnviadas = statusSale === 'Condicional' ? Math.floor(Math.random() * clientesAtendidos) + 1 : 0;
     const pecasVendidas = vendasFeitas > 0 ? vendasFeitas * (Math.floor(Math.random() * 3) + 1) : 0;
     const randomItem = mockClothingItems[Math.floor(Math.random() * mockClothingItems.length)];
+    const posVendasFeitos = Math.floor(Math.random() * 5); // 0 to 4 daily pos-sales contacts
+    const followUpsFeitos = Math.floor(Math.random() * 4); // 0 to 3 daily followups
+    const novasMensagensEnviadas = Math.floor(Math.random() * 15) + 3; // 3 to 17 daily messages sent
     
     result.push({
       id: `mock_${i}`,
@@ -124,10 +168,55 @@ const generateMockSales = (sellers: Seller[], stores: Store[]) => {
       vendasFeitas,
       condicionaisEnviadas,
       pecasVendidas,
+      posVendasFeitos,
+      followUpsFeitos,
+      novasMensagensEnviadas,
       item: randomItem
     });
   }
   return result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+};
+
+const getAvailablePeriods = (sales: Sale[], postSales: PostSale[], followUps: FollowUp[]) => {
+  const months = new Set<string>();
+  
+  // Default current month
+  const todayStr = new Date().toISOString().substring(0, 7); // "2026-05"
+  months.add(todayStr);
+
+  // Generate all months of 2026 to ensure full coverage
+  for (let m = 1; m <= 12; m++) {
+    const padded = m < 10 ? `0${m}` : `${m}`;
+    months.add(`2026-${padded}`);
+  }
+  
+  sales.forEach(s => {
+    if (s.date) months.add(s.date.substring(0, 7));
+  });
+  postSales.forEach(ps => {
+    if (ps.date) months.add(ps.date.substring(0, 7));
+  });
+  followUps.forEach(fu => {
+    if (fu.date) months.add(fu.date.substring(0, 7));
+  });
+
+  const monthNames: Record<string, string> = {
+    '01': 'Janeiro', '02': 'Fevereiro', '03': 'Março', '04': 'Abril',
+    '05': 'Maio', '06': 'Junho', '07': 'Julho', '08': 'Agosto',
+    '09': 'Setembro', '10': 'Outubro', '11': 'Novembro', '12': 'Dezembro'
+  };
+
+  return Array.from(months)
+    .sort()
+    .reverse()
+    .map(p => {
+      const [year, month] = p.split('-');
+      const monthName = monthNames[month] || month;
+      return {
+        value: p,
+        label: `${monthName} de ${year}`
+      };
+    });
 };
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -138,6 +227,153 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [sales, setSales] = useState<Sale[]>([]);
   const [activeStoreFilter, setActiveStoreFilter] = useState<string>('todas');
   
+  const [selectedPeriod, setSelectedPeriod] = useState<string>(() => {
+    // We can default to the 2026-05 (simulated month) or the current real month
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    // If we want to align with current simulated date '2026-05-20', we can lock the default
+    return '2026-05';
+  });
+
+  // Pós-Vendas state with realistic mock data
+  const [postSales, setPostSales] = useState<PostSale[]>([
+    {
+      id: 'ps_1',
+      date: new Date().toISOString().split('T')[0],
+      vendedora: 'Beatriz R.',
+      clientName: 'Ana Flávia Pinheiro',
+      clientContact: '(11) 98765-4321',
+      type: 'Pós-Venda 15 dias',
+      notes: 'Ficou maravilhada com o caimento do Vestido Midi de Seda. Elogiou o atendimento e disse que quer ver novidades brevemente.',
+      status: 'Feliz / Satisfeito'
+    },
+    {
+      id: 'ps_2',
+      date: new Date().toISOString().split('T')[0],
+      vendedora: 'Diana M.',
+      clientName: 'Mariana de Souza Costa',
+      clientContact: '(21) 99122-3344',
+      type: 'Pós-Venda 30 dias',
+      notes: 'Entrou em contato. A cliente relatou dúvida sobre como lavar a blusa de viscose de forma a evitar encolhimento. Vendedora instruiu por áudio.',
+      status: 'Dúvida / Ajuste'
+    },
+    {
+      id: 'ps_3',
+      date: new Date(Date.now() - 86400000).toISOString().split('T')[0], // yesterday
+      vendedora: 'Beatriz R.',
+      clientName: 'Clara Albuquerque',
+      clientContact: 'clara@albuquerque.com',
+      type: 'Feedback',
+      notes: 'Mensagem padrão enviada perguntando se gostou das calças. Mensagem recebida, mas sem retorno ainda.',
+      status: 'Sem Retorno'
+    },
+    {
+      id: 'ps_4',
+      date: new Date(Date.now() - 172800000).toISOString().split('T')[0], // 2 days ago
+      vendedora: 'Diana M.',
+      clientName: 'Fernanda de Souza',
+      clientContact: '(11) 98888-7711',
+      type: 'Pós-Venda 15 dias',
+      notes: 'Adorou as peças! Disse que a calça jeans wide leg virou seu xodó e usa toda semana.',
+      status: 'Feliz / Satisfeito'
+    },
+    {
+      id: 'ps_5',
+      date: new Date().toISOString().split('T')[0],
+      vendedora: 'Carla T.',
+      clientName: 'Sonia Mendes Fagundes',
+      clientContact: '(11) 97722-1100',
+      type: 'Pós-Venda 15 dias',
+      notes: 'Inserir contato na agenda para ligar de tarde e coletar feedback da jaqueta de couro.',
+      status: 'Pendente'
+    }
+  ]);
+
+  // Follow-ups state with realistic mock data (sales that are stopped/stuck)
+  const [followUps, setFollowUps] = useState<FollowUp[]>([
+    {
+      id: 'fu_1',
+      date: new Date().toISOString().split('T')[0],
+      vendedora: 'Beatriz R.',
+      clientName: 'Camila Martins',
+      clientContact: '(11) 99344-5566',
+      daysStuck: 8,
+      lastContact: new Date(Date.now() - 8 * 86400000).toISOString().split('T')[0],
+      stuckValue: 690,
+      notes: 'Gostou do Blazer Alfaiataria Creme de R$ 690,00. Ficou de confirmar se o marido ia passar o cartão para retirar no condicional. Retomar contato urgente.',
+      status: 'Pendente'
+    },
+    {
+      id: 'fu_2',
+      date: new Date().toISOString().split('T')[0],
+      vendedora: 'Diana M.',
+      clientName: 'Gabriela Rocha',
+      clientContact: '(11) 98711-2233',
+      daysStuck: 5,
+      lastContact: new Date(Date.now() - 5 * 86400000).toISOString().split('T')[0],
+      stuckValue: 340,
+      notes: 'Calça Jeans de R$ 340 separada. Respondeu hoje dizendo que adora a modelagem e que tentará passar na loja no sábado de manhã.',
+      status: 'Contatado'
+    },
+    {
+      id: 'fu_3',
+      date: new Date(Date.now() - 259200000).toISOString().split('T')[0], // 3 days ago
+      vendedora: 'Beatriz R.',
+      clientName: 'Patrícia Reis Mendonça',
+      clientContact: '(11) 96544-1100',
+      daysStuck: 15,
+      lastContact: new Date(Date.now() - 15 * 86400000).toISOString().split('T')[0],
+      stuckValue: 850,
+      notes: 'Levou condicional, não atendeu nenhuma das 3 tentativas de contato e não devolveu as peças até agora. Gerente acionada para reaver a sacola.',
+      status: 'Perdido / Sem Retorno'
+    },
+    {
+      id: 'fu_4',
+      date: new Date(Date.now() - 86400000).toISOString().split('T')[0], // yesterday
+      vendedora: 'Diana M.',
+      clientName: 'Letícia Abreu',
+      clientContact: '(11) 97711-4400',
+      daysStuck: 3,
+      lastContact: new Date(Date.now() - 1 * 86400000).toISOString().split('T')[0],
+      stuckValue: 490,
+      notes: 'Venda convertida online! Enviou fotos adicionais do Cropped Renda e ela acabou efetuando o pagamento via Pix.',
+      status: 'Vendido (Recuperado)'
+    },
+    {
+      id: 'fu_5',
+      date: new Date().toISOString().split('T')[0],
+      vendedora: 'Carla T.',
+      clientName: 'Alessandra Lemos',
+      clientContact: '(11) 91222-3399',
+      daysStuck: 6,
+      lastContact: new Date(Date.now() - 6 * 86400000).toISOString().split('T')[0],
+      stuckValue: 1200,
+      notes: 'Sacola condicional com 4 peças incríveis (R$ 1.200) ainda está na residência da cliente. Precisa chamá-la para agendar a retirada ou fechamento.',
+      status: 'Pendente'
+    }
+  ]);
+
+  const addPostSale = (ps: Omit<PostSale, 'id'>) => {
+    setPostSales(prev => [...prev, { ...ps, id: Math.random().toString() }]);
+  };
+  const updatePostSale = (id: string, ps: Partial<PostSale>) => {
+    setPostSales(prev => prev.map(item => item.id === id ? { ...item, ...ps } : item));
+  };
+  const deletePostSale = (id: string) => {
+    setPostSales(prev => prev.filter(item => item.id !== id));
+  };
+
+  const addFollowUp = (fu: Omit<FollowUp, 'id'>) => {
+    setFollowUps(prev => [...prev, { ...fu, id: Math.random().toString() }]);
+  };
+  const updateFollowUp = (id: string, fu: Partial<FollowUp>) => {
+    setFollowUps(prev => prev.map(item => item.id === id ? { ...item, ...fu } : item));
+  };
+  const deleteFollowUp = (id: string) => {
+    setFollowUps(prev => prev.filter(item => item.id !== id));
+  };
+
   const [baseCommission, setBaseCommission] = useState<string>('1.0');
   const [levels, setLevels] = useState<Level[]>([
     { id: '1', name: 'Nível 1 - Básico', amount: '80000', reward: 'Premiação R$ 100', commission: '1.2' },
@@ -262,12 +498,19 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const periods = React.useMemo(() => {
+    return getAvailablePeriods(sales, postSales, followUps);
+  }, [sales, postSales, followUps]);
+
   return (
     <DataContext.Provider value={{
       stores, addStore, updateStore, deleteStore,
       sellers, addSeller, updateSeller, deleteSeller,
       sales, addSale, updateSale, deleteSale,
+      postSales, addPostSale, updatePostSale, deletePostSale,
+      followUps, addFollowUp, updateFollowUp, deleteFollowUp,
       activeStoreFilter, setActiveStoreFilter,
+      selectedPeriod, setSelectedPeriod, periods,
       auditLogs, addAuditLog,
       levels, setLevels,
       baseCommission, setBaseCommission,

@@ -14,7 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
 export function SalesPage() {
-  const { sales, addSale, updateSale, deleteSale, sellers, auditLogs, stores } = useData();
+  const { sales, addSale, updateSale, deleteSale, sellers, auditLogs, stores, selectedPeriod, setSelectedPeriod, periods } = useData();
   const { role: userRole } = useAuth();
   const [activeTab, setActiveTab] = useState<'lancamentos' | 'historico'>('lancamentos');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -72,13 +72,17 @@ export function SalesPage() {
   };
 
   const filteredSales = useMemo(() => {
-    const matched = sales.filter((sale) => sellerFilter === 'todas' || sale.vendedora === sellerFilter);
+    const matched = sales.filter((sale) => {
+      const sellerMatch = sellerFilter === 'todas' || sale.vendedora === sellerFilter;
+      const periodMatch = !sale.date || sale.date.startsWith(selectedPeriod);
+      return sellerMatch && periodMatch;
+    });
     return [...matched].sort((a, b) => {
       const dateA = new Date(a.date).getTime();
       const dateB = new Date(b.date).getTime();
       return dateOrder === 'asc' ? dateA - dateB : dateB - dateA;
     });
-  }, [sales, sellerFilter, dateOrder]);
+  }, [sales, sellerFilter, dateOrder, selectedPeriod]);
 
   const visibleSales = filteredSales.slice(0, visibleCount);
 
@@ -120,6 +124,9 @@ export function SalesPage() {
     const selectedClientes = Number(editingSale.clientesAtendidos) || 1;
     const selectedVendas = Number(editingSale.vendasFeitas) || 1;
     const selectedCondicionais = Number(editingSale.condicionaisEnviadas) || 0;
+    const selectedPosVendas = Number(editingSale.posVendasFeitos) || 0;
+    const selectedFollowUps = Number(editingSale.followUpsFeitos) || 0;
+    const selectedMensagens = Number(editingSale.novasMensagensEnviadas) || 0;
 
     const selectedItem = editingSale?.item || 'Vestido Midi Seda';
 
@@ -133,6 +140,9 @@ export function SalesPage() {
         clientesAtendidos: selectedClientes,
         vendasFeitas: selectedVendas,
         condicionaisEnviadas: selectedCondicionais,
+        posVendasFeitos: selectedPosVendas,
+        followUpsFeitos: selectedFollowUps,
+        novasMensagensEnviadas: selectedMensagens,
         status: editingSale.status || 'Fechada',
         condicional: editingSale.status === 'Condicional' || selectedCondicionais > 0,
         item: selectedItem
@@ -150,6 +160,9 @@ export function SalesPage() {
         vendasFeitas: selectedVendas,
         condicionaisEnviadas: selectedCondicionais,
         pecasVendidas: selectedPecas,
+        posVendasFeitos: selectedPosVendas,
+        followUpsFeitos: selectedFollowUps,
+        novasMensagensEnviadas: selectedMensagens,
         item: selectedItem,
       }, userRole);
       toast.success("Venda registrada com sucesso.");
@@ -287,9 +300,8 @@ export function SalesPage() {
                 </div>
 
 
-                
-                {/* Micro-inputs with responsive increment controls */}
-                <div className="grid grid-cols-2 gap-3 border-t border-b py-4 border-gray-100">
+                      {/* Micro-inputs with responsive increment controls */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 border-t border-b py-4 border-gray-100">
                   {/* Clientes Atendidos */}
                   <div className="p-3 bg-gray-50 rounded-2xl border border-gray-200/60 flex flex-col justify-between gap-1 shadow-sm">
                     <span className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider">Clientes Atendidos</span>
@@ -311,7 +323,7 @@ export function SalesPage() {
                           const num = e.target.value === '' ? '' : Math.max(0, Number(e.target.value));
                           setEditingSale(prev => ({...(prev || {}), clientesAtendidos: num as any}));
                         }}
-                        className="w-10 bg-transparent text-center font-black text-sm text-gray-800 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        className="w-8 bg-transparent text-center font-black text-xs text-gray-800 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                       <button
                         type="button"
@@ -347,7 +359,7 @@ export function SalesPage() {
                           const num = e.target.value === '' ? '' : Math.max(0, Number(e.target.value));
                           setEditingSale(prev => ({...(prev || {}), vendasFeitas: num as any}));
                         }}
-                        className="w-10 bg-transparent text-center font-black text-sm text-gray-800 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        className="w-8 bg-transparent text-center font-black text-xs text-gray-800 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                       <button
                         type="button"
@@ -383,7 +395,7 @@ export function SalesPage() {
                           const num = e.target.value === '' ? '' : Math.max(0, Number(e.target.value));
                           setEditingSale(prev => ({...(prev || {}), pecasVendidas: num as any}));
                         }}
-                        className="w-10 bg-transparent text-center font-black text-sm text-gray-800 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        className="w-8 bg-transparent text-center font-black text-xs text-gray-800 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                       <button
                         type="button"
@@ -419,7 +431,7 @@ export function SalesPage() {
                           const num = e.target.value === '' ? '' : Math.max(0, Number(e.target.value));
                           setEditingSale(prev => ({...(prev || {}), condicionaisEnviadas: num as any}));
                         }}
-                        className="w-10 bg-transparent text-center font-black text-sm text-gray-800 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        className="w-8 bg-transparent text-center font-black text-xs text-gray-800 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                       <button
                         type="button"
@@ -428,6 +440,114 @@ export function SalesPage() {
                           setEditingSale(prev => ({...(prev || {}), condicionaisEnviadas: val}));
                         }}
                         className="w-8 h-8 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-xl flex items-center justify-center font-black text-sm select-none active:scale-95 transition-all shadow-sm"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Pós-Vendas Feitos no Dia */}
+                  <div className="p-3 bg-amber-50/50 rounded-2xl border border-amber-200/40 flex flex-col justify-between gap-1 shadow-sm">
+                    <span className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider">Pós-Vendas Feitos</span>
+                    <div className="flex items-center justify-between gap-2 mt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const val = Math.max(0, (editingSale?.posVendasFeitos || 0) - 1);
+                          setEditingSale(prev => ({...(prev || {}), posVendasFeitos: val}));
+                        }}
+                        className="w-8 h-8 bg-white hover:bg-[#fffbeb] text-amber-900 border border-amber-250/50 rounded-xl flex items-center justify-center font-black text-sm select-none active:scale-95 transition-all shadow-sm"
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        value={editingSale?.posVendasFeitos === undefined || editingSale?.posVendasFeitos === null ? 0 : editingSale.posVendasFeitos}
+                        onChange={e => {
+                          const num = e.target.value === '' ? 0 : Math.max(0, Number(e.target.value));
+                          setEditingSale(prev => ({...(prev || {}), posVendasFeitos: num}));
+                        }}
+                        className="w-8 bg-transparent text-center font-black text-xs text-gray-800 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const val = (editingSale?.posVendasFeitos || 0) + 1;
+                          setEditingSale(prev => ({...(prev || {}), posVendasFeitos: val}));
+                        }}
+                        className="w-8 h-8 bg-white hover:bg-[#fffbeb] text-amber-900 border border-amber-250/50 rounded-xl flex items-center justify-center font-black text-sm select-none active:scale-95 transition-all shadow-sm"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Follow-ups Feitos */}
+                  <div className="p-3 bg-amber-50/50 rounded-2xl border border-amber-200/40 flex flex-col justify-between gap-1 shadow-sm">
+                    <span className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider">Follow-Up Feitos</span>
+                    <div className="flex items-center justify-between gap-2 mt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const val = Math.max(0, (editingSale?.followUpsFeitos || 0) - 1);
+                          setEditingSale(prev => ({...(prev || {}), followUpsFeitos: val}));
+                        }}
+                        className="w-8 h-8 bg-white hover:bg-[#fffbeb] text-amber-900 border border-amber-250/50 rounded-xl flex items-center justify-center font-black text-sm select-none active:scale-95 transition-all shadow-sm"
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        value={editingSale?.followUpsFeitos === undefined || editingSale?.followUpsFeitos === null ? 0 : editingSale.followUpsFeitos}
+                        onChange={e => {
+                          const num = e.target.value === '' ? 0 : Math.max(0, Number(e.target.value));
+                          setEditingSale(prev => ({...(prev || {}), followUpsFeitos: num}));
+                        }}
+                        className="w-8 bg-transparent text-center font-black text-xs text-gray-800 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const val = (editingSale?.followUpsFeitos || 0) + 1;
+                          setEditingSale(prev => ({...(prev || {}), followUpsFeitos: val}));
+                        }}
+                        className="w-8 h-8 bg-white hover:bg-[#fffbeb] text-amber-900 border border-amber-250/50 rounded-xl flex items-center justify-center font-black text-sm select-none active:scale-95 transition-all shadow-sm"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Novas Mensagens Enviadas */}
+                  <div className="p-3 bg-cyan-50/40 rounded-2xl border border-cyan-200/30 flex flex-col justify-between gap-1 shadow-sm col-span-2 sm:col-span-1">
+                    <span className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider">SMS / Mensagens Env.</span>
+                    <div className="flex items-center justify-between gap-2 mt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const val = Math.max(0, (editingSale?.novasMensagensEnviadas || 0) - 1);
+                          setEditingSale(prev => ({...(prev || {}), novasMensagensEnviadas: val}));
+                        }}
+                        className="w-8 h-8 bg-white hover:bg-cyan-50/50 text-cyan-900 border border-cyan-250/30 rounded-xl flex items-center justify-center font-black text-sm select-none active:scale-95 transition-all shadow-sm"
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        value={editingSale?.novasMensagensEnviadas === undefined || editingSale?.novasMensagensEnviadas === null ? 0 : editingSale.novasMensagensEnviadas}
+                        onChange={e => {
+                          const num = e.target.value === '' ? 0 : Math.max(0, Number(e.target.value));
+                          setEditingSale(prev => ({...(prev || {}), novasMensagensEnviadas: num}));
+                        }}
+                        className="w-8 bg-transparent text-center font-black text-xs text-gray-800 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const val = (editingSale?.novasMensagensEnviadas || 0) + 1;
+                          setEditingSale(prev => ({...(prev || {}), novasMensagensEnviadas: val}));
+                        }}
+                        className="w-8 h-8 bg-white hover:bg-cyan-50/50 text-cyan-900 border border-cyan-250/30 rounded-xl flex items-center justify-center font-black text-sm select-none active:scale-95 transition-all shadow-sm"
                       >
                         +
                       </button>
@@ -552,6 +672,19 @@ export function SalesPage() {
                 <SelectContent>
                   <SelectItem value="todas" className="text-xs font-semibold">Todas as Vendedoras</SelectItem>
                   {sellers.map(s => <SelectItem key={s.id} value={s.name} className="text-xs font-semibold">{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+
+              <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+                <SelectTrigger className="w-[180px] bg-white border-gray-200 shadow-sm text-xs font-bold">
+                  <SelectValue placeholder="Filtrar Período" />
+                </SelectTrigger>
+                <SelectContent>
+                  {periods.map(p => (
+                    <SelectItem key={p.value} value={p.value} className="text-xs font-semibold">
+                      {p.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
 

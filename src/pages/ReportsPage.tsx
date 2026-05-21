@@ -17,17 +17,20 @@ export function ReportsPage() {
   const [sortBy, setSortBy] = useState<'realized' | 'items' | 'progress' | 'commissionEarned' | 'ticketMedio' | 'taxaConversao'>('realized');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
-  const { sales, sellers, levels, baseCommission, sellersTarget, stores } = useData();
+  const { sales, sellers, levels, baseCommission, sellersTarget, stores, selectedPeriod, setSelectedPeriod, periods } = useData();
 
   // Dynamically aggregate sales per seller
   const teamData = useMemo(() => {
     return sellers.map(seller => {
-      const sellerSales = sales.filter(s => s.vendedora === seller.name);
+      const sellerSales = sales.filter(s => s.vendedora === seller.name && s.date && s.date.startsWith(selectedPeriod));
       const totalVendido = sellerSales.reduce((acc, curr) => acc + curr.amount, 0);
       const totalClientesAtendidos = sellerSales.reduce((acc, curr) => acc + (curr.clientesAtendidos || 0), 0);
       const totalVendasFeitas = sellerSales.filter(s => s.vendedora === seller.name && s.status === 'Fechada').reduce((acc, curr) => acc + (curr.vendasFeitas || 0), 0);
       const totalCondicionaisEnviadas = sellerSales.reduce((acc, curr) => acc + (curr.condicionaisEnviadas || 0), 0);
       const totalPecasVendidas = sellerSales.reduce((acc, curr) => acc + (curr.pecasVendidas || 0), 0);
+      const totalPosVendas = sellerSales.reduce((acc, curr) => acc + (curr.posVendasFeitos || 0), 0);
+      const totalFollowUps = sellerSales.reduce((acc, curr) => acc + (curr.followUpsFeitos || 0), 0);
+      const totalNovasMensagens = sellerSales.reduce((acc, curr) => acc + (curr.novasMensagensEnviadas || 0), 0);
 
       const ticketMedio = totalVendasFeitas > 0 ? totalVendido / totalVendasFeitas : 0;
       const taxaConversao = totalClientesAtendidos > 0 ? (totalVendasFeitas / totalClientesAtendidos) * 100 : 0;
@@ -68,12 +71,15 @@ export function ReportsPage() {
         condicionaisEnviadas: totalCondicionaisEnviadas,
         ticketMedio,
         taxaConversao,
+        posVendas: totalPosVendas,
+        followUps: totalFollowUps,
+        novasMensagens: totalNovasMensagens,
         level: reachedLevel ? reachedLevel.name : 'Abaixo da Meta',
         commissionRate,
         commissionEarned
       };
     });
-  }, [sales, sellers, levels, baseCommission, sellersTarget, stores]);
+  }, [sales, sellers, levels, baseCommission, sellersTarget, stores, selectedPeriod]);
 
   const filteredTeam = useMemo(() => {
     return teamData
@@ -131,6 +137,19 @@ export function ReportsPage() {
             <CardDescription className="text-xs">Clique nas colunas de Volume, Peças, Comissão, Ticket Médio e Conversão para ordenar.</CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2 md:ms-auto">
+            <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+              <SelectTrigger className="w-[170px] bg-white text-xs h-9 border-gray-200 font-bold">
+                <SelectValue placeholder="Filtrar Período" />
+              </SelectTrigger>
+              <SelectContent>
+                {periods.map(p => (
+                  <SelectItem key={p.value} value={p.value} className="text-xs font-semibold">
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             <Select value={levelFilter} onValueChange={setLevelFilter}>
               <SelectTrigger className="w-[170px] bg-white text-xs h-9 border-gray-200">
                 <SelectValue placeholder="Nível Atingido" />
@@ -177,6 +196,9 @@ export function ReportsPage() {
                 <TableHead className="font-bold text-gray-400 uppercase text-[10px] tracking-wider cursor-pointer select-none" onClick={() => handleSort('taxaConversao')}>
                   <div className="flex items-center gap-1">Tx. Conversão <ArrowUpDown className="w-3 h-3 text-[#D4AF37]"/></div>
                 </TableHead>
+                <TableHead className="font-bold text-gray-400 uppercase text-[10px] tracking-wider">Pós-Venda</TableHead>
+                <TableHead className="font-bold text-gray-400 uppercase text-[10px] tracking-wider">Follow-Up</TableHead>
+                <TableHead className="font-bold text-gray-400 uppercase text-[10px] tracking-wider">SMS / Msg</TableHead>
                 <TableHead className="font-bold text-gray-400 uppercase text-[10px] tracking-wider">Nível Conquistado</TableHead>
                 <TableHead className="font-bold text-gray-400 uppercase text-[10px] tracking-wider cursor-pointer select-none" onClick={() => handleSort('commissionEarned')}>
                   <div className="flex items-center gap-1">Comissão Acumulada <ArrowUpDown className="w-3 h-3 text-[#D4AF37]"/></div>
@@ -217,6 +239,15 @@ export function ReportsPage() {
                       <Badge className={`text-xs font-bold leading-none ${member.taxaConversao >= 70 ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-100' : member.taxaConversao >= 40 ? 'bg-blue-100 text-blue-800 hover:bg-blue-100' : 'bg-rose-50 text-rose-700 hover:bg-rose-50'}`}>
                         {member.taxaConversao.toFixed(1)}%
                       </Badge>
+                    </TableCell>
+                    <TableCell className="py-4.5 text-xs font-semibold text-zinc-600">
+                      {member.posVendas} contatos
+                    </TableCell>
+                    <TableCell className="py-4.5 text-xs font-semibold text-zinc-600">
+                      {member.followUps} seguidos
+                    </TableCell>
+                    <TableCell className="py-4.5 text-xs font-semibold text-zinc-600">
+                      {member.novasMensagens} envs.
                     </TableCell>
                     <TableCell className="py-4.5">
                       <Badge className={`text-xs font-black uppercase rounded-lg px-2.5 py-1 ${

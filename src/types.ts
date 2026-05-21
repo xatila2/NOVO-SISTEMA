@@ -46,4 +46,7 @@ export interface Sale {
   date: string; // ISO string
   isConditional: boolean;
   isConverted?: boolean;
+  posVendasFeitos?: number;
+  followUpsFeitos?: number;
+  novasMensagensEnviadas?: number;
 }

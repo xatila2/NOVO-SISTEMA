@@ -21,7 +21,7 @@ export function Layout() {
   const filteredNav = navItems.filter(item => item.roles.includes(userRole));
 
   return (
-    <div className="h-screen w-full bg-[#F4F5F7] text-[#2F2F2F] flex overflow-hidden font-sans">
+    <div className="h-screen w-full bg-gradient-to-tr from-[#E3E8EC] via-[#F4F5F7] to-[#EBEFF5] text-[#2F2F2F] flex overflow-hidden font-sans">
       {/* Sidebar Desktop */}
       <aside className="w-20 bg-[#111111] hidden md:flex flex-col items-center py-8 gap-10 border-r border-[#222222] shrink-0">
         <div className="w-10 h-10 bg-[#D4AF37] rounded-xl flex items-center justify-center font-bold text-[#111111] text-xl shadow-lg shrink-0">
